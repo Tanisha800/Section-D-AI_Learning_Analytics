@@ -42,6 +42,7 @@ def preprocess_data(df):
 
     return df
 
+
 def logistic_regression(df):
 
     features = [
@@ -70,4 +71,31 @@ def logistic_regression(df):
 
     return accuracy, precision
 
+
+def linear_regression(df):
+
+    features = [
+        "avg_quiz",
+        "Assignment Score",
+        "Midterm",
+        "Time Spent (hrs/week)"
+    ]
+
+    X = df[features]
+    y = df["Final Exam"]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,random_state=42)
+
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    model = LinearRegression()
+    model.fit(X_train_scaled, y_train)
+
+    y_pred = model.predict(X_test_scaled)
+
+    rmse = root_mean_squared_error(y_test, y_pred)
+
+    return rmse
 
