@@ -28,4 +28,10 @@ def preprocess_data(df):
     # Drop rows without Result column
     df = df.dropna(subset=['Result'])
 
+    df["avg_quiz"] = df[["Quiz 1", "Quiz 2", "Quiz 3"]].mean(axis=1)
+
+    df["total_score"] = df[
+        ["avg_quiz", "Assignment Score", "Midterm", "Final Exam"]
+    ].mean(axis=1)
+
     return df
