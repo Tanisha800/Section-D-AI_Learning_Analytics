@@ -1,68 +1,79 @@
 import pandas as pd
 import numpy as np
 
-from sklearn.linear_model import LogisticRegression,LinearRegression
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score,precision_score, root_mean_squared_error
+from sklearn.metrics import accuracy_score, precision_score, mean_squared_error
 from sklearn.cluster import KMeans
+
 
 def load_data(path):
     df = pd.read_csv(path)
     return df
 
+
 def preprocess_data(df):
 
-    # Replace absent with 0
-    df = df.replace(['absent', 'Absent'], 0)
+    df = df.drop(columns=["Unnamed: 0"])
 
-    # Fix result column
-    df['Result'] = df['Result'].str.lower()
-    df['Result'] = df['Result'].replace({'pass': 1, 'fail': 0})
+    df["AverageScore"] = (
+        df["MathScore"] +
+        df["ReadingScore"] +
+        df["WritingScore"]
+    ) / 3
 
-    # Convert numeric columns and handle missing values
-    numeric_cols = [
-        "Age", "Quiz 1", "Quiz 2", "Quiz 3",
-        "Assignment Score", "Midterm",
-        "Final Exam", "Time Spent (hrs/week)"
-    ]
+    df["ParentEduc"] = df["ParentEduc"].replace({
+        "some high school": "high school",
+    })
 
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-        df[col] = df[col].fillna(df[col].mean())
+    df["Result"] = (df["AverageScore"] >= 40).astype(int)
 
-    # Drop rows without Result column
-    df = df.dropna(subset=['Result'])
-
-    # Add new features
-    df["avg_quiz"] = df[["Quiz 1", "Quiz 2", "Quiz 3"]].mean(axis=1)
-
-    df["total_score"] = df[
-        ["avg_quiz", "Assignment Score", "Midterm", "Final Exam"]
-    ].mean(axis=1)
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].fillna(df[col].mean())
+        else:
+            df[col] = df[col].fillna(df[col].mode()[0])
 
     return df
 
 
-def logistic_regression(df):
+def get_features_targets(df):
 
-    features = [
-        "avg_quiz",
-        "Assignment Score",
-        "Midterm",
-        "Time Spent (hrs/week)"
+    feature_cols = [
+        "EthnicGroup",
+        "ParentEduc",
+        "LunchType",
+        "TestPrep",
+        "ParentMaritalStatus",
+        "PracticeSport",
+        "IsFirstChild",
+        "NrSiblings",
+        "TransportMeans",
+        "WklyStudyHours"
     ]
 
-    X = df[features]
-    y = df["Result"]
+    X = df[feature_cols]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,random_state=42)
+    X = pd.get_dummies(X, drop_first=True)
+
+    y_logistic = df["Result"]          
+    y_linear = df["AverageScore"]      
+
+    return X, y_logistic, y_linear
+
+
+def logistic_regression(X, y):
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    model = LogisticRegression()
+    model = LogisticRegression(max_iter=1000)
     model.fit(X_train_scaled, y_train)
 
     y_pred = model.predict(X_test_scaled)
@@ -73,19 +84,11 @@ def logistic_regression(df):
     return accuracy, precision
 
 
-def linear_regression(df):
+def linear_regression(X, y):
 
-    features = [
-        "avg_quiz",
-        "Assignment Score",
-        "Midterm",
-        "Time Spent (hrs/week)"
-    ]
-
-    X = df[features]
-    y = df["Final Exam"]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
@@ -96,28 +99,24 @@ def linear_regression(df):
 
     y_pred = model.predict(X_test_scaled)
 
-    rmse = root_mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 
     return rmse
 
 
 def k_means(df):
 
-    features = [
-        "avg_quiz",
-        "Assignment Score",
-        "Midterm",
-        "Time Spent (hrs/week)"
-    ]
-    X = df[features]
+    cluster_features = df[["AverageScore", "WklyStudyHours"]]
+
+    cluster_features = pd.get_dummies(cluster_features, drop_first=True)
 
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(cluster_features)
 
     kmeans = KMeans(n_clusters=3, random_state=42)
     df["Cluster"] = kmeans.fit_predict(X_scaled)
 
-    cluster_means = df.groupby("Cluster")['total_score'].mean()
+    cluster_means = df.groupby("Cluster")["AverageScore"].mean()
     sorted_clusters = cluster_means.sort_values().index
 
     cluster_labels = {
@@ -126,26 +125,29 @@ def k_means(df):
         sorted_clusters[2]: "High Performer"
     }
 
-    df['Learner Category'] = df['Cluster'].map(cluster_labels)
+    df["Learner Category"] = df["Cluster"].map(cluster_labels)
 
     return df
 
 
 if __name__ == "__main__":
 
-    path = "data/raw/rawdataset.csv" 
+    path = "./data/raw/StudentsPerformance.csv"
+
     df = load_data(path)
     df = preprocess_data(df)
-    accuracy, precision = logistic_regression(df)
-    rmse = linear_regression(df)
+
+    X, y_logistic, y_linear = get_features_targets(df)
+
+    accuracy, precision = logistic_regression(X, y_logistic)
+    rmse = linear_regression(X, y_linear)
+
     df = k_means(df)
 
     print("Results:")
     print(f"Logistic Regression Accuracy: {accuracy}")
     print(f"Logistic Regression Precision: {precision}")
     print(f"Linear Regression RMSE: {rmse}")
+
     print("\nCluster Distribution:")
-    print(df['Learner Category'].value_counts())
-
-
-
+    print(df["Learner Category"].value_counts())
