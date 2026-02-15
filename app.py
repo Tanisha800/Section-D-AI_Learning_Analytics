@@ -5,6 +5,7 @@ from sklearn.linear_model import LogisticRegression,LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score,precision_score, root_mean_squared_error
+from sklearn.cluster import KMeans
 
 def load_data(path):
     df = pd.read_csv(path)
@@ -98,4 +99,53 @@ def linear_regression(df):
     rmse = root_mean_squared_error(y_test, y_pred)
 
     return rmse
+
+
+def k_means(df):
+
+    features = [
+        "avg_quiz",
+        "Assignment Score",
+        "Midterm",
+        "Time Spent (hrs/week)"
+    ]
+    X = df[features]
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    kmeans = KMeans(n_clusters=3, random_state=42)
+    df["Cluster"] = kmeans.fit_predict(X_scaled)
+
+    cluster_means = df.groupby("Cluster")['total_score'].mean()
+    sorted_clusters = cluster_means.sort_values().index
+
+    cluster_labels = {
+        sorted_clusters[0]: "At Risk",
+        sorted_clusters[1]: "Average",
+        sorted_clusters[2]: "High Performer"
+    }
+
+    df['Learner Category'] = df['Cluster'].map(cluster_labels)
+
+    return df
+
+
+if __name__ == "__main__":
+
+    path = "data/raw/rawdataset.csv" 
+    df = load_data(path)
+    df = preprocess_data(df)
+    accuracy, precision = logistic_regression(df)
+    rmse = linear_regression(df)
+    df = k_means(df)
+
+    print("Results:")
+    print(f"Logistic Regression Accuracy: {accuracy}")
+    print(f"Logistic Regression Precision: {precision}")
+    print(f"Linear Regression RMSE: {rmse}")
+    print("\nCluster Distribution:")
+    print(df['Learner Category'].value_counts())
+
+
 
