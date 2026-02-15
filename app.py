@@ -132,7 +132,7 @@ def k_means(df):
 
 if __name__ == "__main__":
 
-    path = "./data/raw/StudentsPerformance.csv"
+    path = "./Data/raw/Student_Performance.csv"
 
     df = load_data(path)
     df = preprocess_data(df)
