@@ -1,0 +1,4 @@
+EthnicGroup,ParentEduc,LunchType,TestPrep,ParentMaritalStatus,PracticeSport,IsFirstChild,NrSiblings,TransportMeans,WklyStudyHours,MathScore,ReadingScore,WritingScore
+Group A,high school,standard,completed,married,yes,yes,2,bus,5 - 10,55,60,58
+Group B,associate degree,free/reduced,none,single,no,no,3,private,< 5,30,35,32
+Group C,bachelor's degree,standard,completed,married,yes,no,1,bus,> 10,85,88,90

@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, mean_squared_error
 from sklearn.cluster import KMeans
+import joblib
 
 
 def load_data(path):
@@ -15,7 +16,9 @@ def load_data(path):
 
 def preprocess_data(df):
 
-    df = df.drop(columns=["Unnamed: 0"])
+    if "Unnamed: 0" in df.columns:
+        df = df.drop(columns=["Unnamed: 0"])
+
 
     df["AverageScore"] = (
         df["MathScore"] +
@@ -26,6 +29,15 @@ def preprocess_data(df):
     df["ParentEduc"] = df["ParentEduc"].replace({
         "some high school": "high school",
     })
+
+    df["WklyStudyHours"] = df["WklyStudyHours"].str.strip()
+    df["WklyStudyHours"] = df["WklyStudyHours"].str.replace(" ", "")
+
+    df["WklyStudyHours"] = df["WklyStudyHours"].replace({
+    "<5": 3,
+    "5-10": 7,
+    ">10": 12
+})
 
     df["Result"] = (df["AverageScore"] >= 40).astype(int)
 
@@ -57,97 +69,150 @@ def get_features_targets(df):
 
     X = pd.get_dummies(X, drop_first=True)
 
-    y_logistic = df["Result"]          
-    y_linear = df["AverageScore"]      
+    y_class = df["Result"]          
+    y_reg = df["AverageScore"]      
 
-    return X, y_logistic, y_linear
+    return X, y_class, y_reg 
 
 
-def logistic_regression(X, y):
+def train_models(X, y_class, y_reg):
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+    feature_columns = X.columns.tolist()
+
+    X_train, X_test, y_train_class, y_test_class = train_test_split(
+        X, y_class, test_size=0.2, random_state=42
+    )
+
+    _, _, y_train_reg, y_test_reg = train_test_split(
+        X, y_reg, test_size=0.2, random_state=42
     )
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_train_scaled, y_train)
+    log_model = LogisticRegression(max_iter=1000)
+    log_model.fit(X_train_scaled, y_train_class)
 
-    y_pred = model.predict(X_test_scaled)
+    lin_model = LinearRegression()
+    lin_model.fit(X_train_scaled, y_train_reg)
 
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred)
+    y_pred_class = log_model.predict(X_test_scaled)
+    y_pred_reg = lin_model.predict(X_test_scaled)
 
-    return accuracy, precision
+    accuracy = accuracy_score(y_test_class, y_pred_class)
+    precision = precision_score(y_test_class, y_pred_class)
+    rmse = np.sqrt(mean_squared_error(y_test_reg, y_pred_reg))
 
-
-def linear_regression(X, y):
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    model = LinearRegression()
-    model.fit(X_train_scaled, y_train)
-
-    y_pred = model.predict(X_test_scaled)
-
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-
-    return rmse
+    return log_model, lin_model, scaler, feature_columns, accuracy, precision, rmse
 
 
-def k_means(df):
+
+def train_kmeans(df):
 
     cluster_features = df[["AverageScore", "WklyStudyHours"]]
 
-    cluster_features = pd.get_dummies(cluster_features, drop_first=True)
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(cluster_features)
+    cluster_scaler = StandardScaler()
+    X_scaled = cluster_scaler.fit_transform(cluster_features)
 
     kmeans = KMeans(n_clusters=3, random_state=42)
-    df["Cluster"] = kmeans.fit_predict(X_scaled)
+    kmeans.fit(X_scaled)
 
-    cluster_means = df.groupby("Cluster")["AverageScore"].mean()
-    sorted_clusters = cluster_means.sort_values().index
+    return kmeans, cluster_scaler
+
+def predict_new_data(df_new, log_model, lin_model, scaler, kmeans, cluster_scaler):
+
+    df_new = preprocess_data(df_new)
+
+    feature_cols = [
+        "EthnicGroup",
+        "ParentEduc",
+        "LunchType",
+        "TestPrep",
+        "ParentMaritalStatus",
+        "PracticeSport",
+        "IsFirstChild",
+        "NrSiblings",
+        "TransportMeans",
+        "WklyStudyHours"
+    ]
+
+    X_new = df_new[feature_cols]
+    X_new = pd.get_dummies(X_new, drop_first=True)
+
+    feature_columns = joblib.load("feature_columns.pkl")
+    X_new = X_new.reindex(columns=feature_columns, fill_value=0)
+
+
+    X_scaled = scaler.transform(X_new)
+
+    df_new["Predicted_PassFail"] = log_model.predict(X_scaled)
+
+    df_new["Predicted_AverageScore"] = lin_model.predict(X_scaled)
+
+    cluster_features = df_new[["AverageScore", "WklyStudyHours"]]
+    cluster_scaled = cluster_scaler.transform(cluster_features)
+
+    df_new["Cluster"] = kmeans.predict(cluster_scaled)
+
+    cluster_centers = kmeans.cluster_centers_[:, 0]
+    sorted_indices = np.argsort(cluster_centers)
 
     cluster_labels = {
-        sorted_clusters[0]: "At Risk",
-        sorted_clusters[1]: "Average",
-        sorted_clusters[2]: "High Performer"
+        sorted_indices[0]: "At Risk",
+        sorted_indices[1]: "Average",
+        sorted_indices[2]: "High Performer"
     }
 
-    df["Learner Category"] = df["Cluster"].map(cluster_labels)
+    df_new["Learner Category"] = df_new["Cluster"].map(cluster_labels)
 
+    return df_new
+
+
+def generate_recommendations(df):
+
+    recommendations = []
+
+    for _, row in df.iterrows():
+
+        if row["Learner Category"] == "At Risk":
+            rec = "Revise fundamentals daily, increase weekly study hours, focus on weak subjects."
+
+        elif row["Learner Category"] == "Average":
+            rec = "Practice moderate to advanced problems and attempt weekly mock tests."
+
+        else:
+            rec = "Maintain performance and explore competitive or advanced-level materials."
+
+        recommendations.append(rec)
+
+    df["Recommendation"] = recommendations
     return df
 
 
 if __name__ == "__main__":
 
-    path = "./data/raw/StudentsPerformance.csv"
+    path = "./Data/raw/Student_Performance.csv"
 
     df = load_data(path)
     df = preprocess_data(df)
 
-    X, y_logistic, y_linear = get_features_targets(df)
+    X, y_class, y_reg = get_features_targets(df)
 
-    accuracy, precision = logistic_regression(X, y_logistic)
-    rmse = linear_regression(X, y_linear)
+    log_model, lin_model, scaler, feature_columns, acc, prec, rmse = train_models(X, y_class, y_reg)
 
-    df = k_means(df)
+    kmeans, cluster_scaler = train_kmeans(df)
 
-    print("Results:")
-    print(f"Logistic Regression Accuracy: {accuracy}")
-    print(f"Logistic Regression Precision: {precision}")
-    print(f"Linear Regression RMSE: {rmse}")
+    print("Training Results")
+    print("Accuracy:", acc)
+    print("Precision:", prec)
+    print("RMSE:", rmse)
 
-    print("\nCluster Distribution:")
-    print(df["Learner Category"].value_counts())
+    joblib.dump(log_model, "logistic_model.pkl")
+    joblib.dump(lin_model, "linear_model.pkl")
+    joblib.dump(scaler, "scaler.pkl")
+    joblib.dump(kmeans, "kmeans_model.pkl")
+    joblib.dump(cluster_scaler, "cluster_scaler.pkl")
+    joblib.dump(feature_columns, "feature_columns.pkl")
+
+    print("Models Saved Successfully ✅")
