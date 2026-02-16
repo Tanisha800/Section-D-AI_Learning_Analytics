@@ -30,7 +30,7 @@ def preprocess_data(df):
         "some high school": "high school",
     })
 
-    df["WklyStudyHours"] = df["WklyStudyHours"].str.strip()
+    df["WklyStudyHours"] = df["WklyStudyHours"].astype(str).str.strip()
     df["WklyStudyHours"] = df["WklyStudyHours"].str.replace(" ", "")
 
     df["WklyStudyHours"] = df["WklyStudyHours"].replace({
