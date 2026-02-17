@@ -161,17 +161,32 @@ if log_model is not None:
             
             st.success("Analysis Complete!")
             
-            st.subheader("Predictions")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Pass/Fail Prediction", "Pass" if results_df["Predicted_PassFail"][0] == 1 else "Fail")
-            with col2:
-                st.metric("Predicted Average Score", f"{results_df['Predicted_AverageScore'][0]:.2f}")
-            with col3:
-                st.metric("Learner Category", results_df["Learner Category"][0])
+            # Retrieve values
+            predicted_pass_fail = results_df["Predicted_PassFail"][0]
+            predicted_score = results_df["Predicted_AverageScore"][0]
+            actual_score = results_df["AverageScore"][0] # Calculated from inputs
+            learner_category = results_df["Learner Category"][0]
+            recommendation = results_df["Recommendation"][0]
             
-            st.subheader("Recommendation")
-            st.info(results_df["Recommendation"][0])
+            st.subheader("Analysis Results")
+            
+            st.warning("Note: 'Predicted' values are based purely on your **Demographic Profile & Study Habits**, not your current scores. 'Current' values are based on the scores you entered.")
+
+            # Row 1: Actual vs Predicted
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Current Average Score", f"{actual_score:.2f}", help="Calculated from the Math, Reading, and Writing scores you entered.")
+            with col2:
+                status = "Pass" if actual_score >= 40 else "Fail"
+                st.metric("Current Status", status, delta_color="normal" if status=="Pass" else "inverse", help="Pass if Average Score >= 40.")
+            with col3:
+                st.metric("Predicted Potential Score", f"{predicted_score:.2f}", help="Estimated score based on your demographics and study habits.")
+            with col4:
+                st.metric("Predicted Potential Status", "Pass" if predicted_pass_fail == 1 else "Fail", help="Likely status based on your profile.")
+
+            # Row 2: Category and Recommendation
+            st.write(f"**Learner Category:** {learner_category}")
+            st.info(f"**Recommendation:** {recommendation}")
 
             # Visualization Section
             st.markdown("---")
@@ -186,10 +201,15 @@ if log_model is not None:
                 # 1. Score Comparison
                 st.write("### Score Comparison")
                 avg_score_dataset = processed_df["AverageScore"].mean()
-                student_score = results_df['Predicted_AverageScore'][0]
                 
                 fig1, ax1 = plt.subplots(figsize=(8, 4))
-                sns.barplot(x=["Dataset Average", "Student Predicted"], y=[avg_score_dataset, student_score], ax=ax1, palette=["grey", "blue"])
+                # Compare Dataset, Actual, and Predicted
+                sns.barplot(
+                    x=["Dataset Avg", "Your Current", "Your Profile"], 
+                    y=[avg_score_dataset, actual_score, predicted_score], 
+                    ax=ax1, 
+                    palette=["grey", "blue", "green"]
+                )
                 ax1.set_ylabel("Average Score")
                 ax1.set_ylim(0, 100)
                 ax1.bar_label(ax1.containers[0], fmt='%.1f')
@@ -199,12 +219,10 @@ if log_model is not None:
                 st.write("### Learner Category Cluster Visualization")
                 
                 # We need to assign clusters to the dataset to color it
-                # Using the logic from app.py/train_kmeans roughly
                 cluster_features_df = processed_df[["AverageScore", "WklyStudyHours"]]
                 cluster_scaled_df = cluster_scaler.transform(cluster_features_df)
                 processed_df["Cluster"] = kmeans.predict(cluster_scaled_df)
                 
-                # Map clusters to labels (Logic from app.py)
                 cluster_centers = kmeans.cluster_centers_[:, 0]
                 sorted_indices = np.argsort(cluster_centers)
                 cluster_labels_map = {
@@ -214,15 +232,8 @@ if log_model is not None:
                 }
                 processed_df["Learner Category"] = processed_df["Cluster"].map(cluster_labels_map)
 
-                # Prepare student data point
-                student_wkly_study_hours = results_df["WklyStudyHours"][0] # This is numeric 3, 7, 12 from preprocess
-                # Note: results_df is already processed by predict_new_data calling preprocess_data internally?
-                # Let's check app.py: predict_new_data calls preprocess_data(df_new). 
-                # preprocess_data maps strings to 3, 7, 12. 
-                # So results_df["WklyStudyHours"] is numeric.
-
-                feature_columns = joblib.load("feature_columns.pkl") # Reloading to be safe or use loaded one? 
-                # We loaded feature_columns in load_artifacts return.
+                # Prepare student data point - using ACTUAL score for plotting current position
+                student_wkly_study_hours = results_df["WklyStudyHours"][0] 
                 
                 fig2, ax2 = plt.subplots(figsize=(10, 6))
                 
@@ -233,21 +244,33 @@ if log_model is not None:
                     y="AverageScore", 
                     hue="Learner Category", 
                     hue_order=["At Risk", "Average", "High Performer"],
-                    alpha=0.6,
+                    alpha=0.3, # Reduce alpha to make student point stand out
                     palette="viridis",
                     ax=ax2
                 )
                 
-                # Plot student point
+                # Plot student actual point
                 ax2.scatter(
                     x=student_wkly_study_hours, 
-                    y=student_score, 
+                    y=actual_score, 
                     color='red', 
-                    s=200, 
+                    s=250, 
                     edgecolors='black', 
                     marker='X', 
-                    label='You',
+                    label='You (Current)',
                     zorder=10
+                )
+                
+                # Optional: Plot predicted point?
+                ax2.scatter(
+                    x=student_wkly_study_hours, 
+                    y=predicted_score, 
+                    color='green', 
+                    s=150, 
+                    edgecolors='black', 
+                    marker='o', 
+                    label='You (Predicted)',
+                    zorder=9
                 )
                 
                 ax2.set_title("Study Hours vs. Average Score")

@@ -138,7 +138,28 @@ def predict_new_data(df_new, log_model, lin_model, scaler, kmeans, cluster_scale
         "WklyStudyHours"
     ]
 
+    # Define all possible categories for each column to ensure consistent get_dummies
+    categories = {
+        "EthnicGroup": ["group A", "group B", "group C", "group D", "group E"],
+        "ParentEduc": ["some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree"],
+        "LunchType": ["standard", "free/reduced"],
+        "TestPrep": ["none", "completed"],
+        "ParentMaritalStatus": ["married", "single", "widowed", "divorced"],
+        "PracticeSport": ["regularly", "sometimes", "never"],
+        "IsFirstChild": ["yes", "no"],
+        "TransportMeans": ["school_bus", "private"],
+        # WklyStudyHours is now numeric (3, 7, 12) so no need to enforce categories for it 
+        # But wait, looking at feature_columns in debug output: ['NrSiblings', 'WklyStudyHours', 'EthnicGroup_group B', ...]
+        # WklyStudyHours is numeric there. So simple get_dummies ignores it which is correct.
+    }
+
     X_new = df_new[feature_cols]
+
+    # Enforce categorical types
+    for col, cats in categories.items():
+        if col in X_new.columns:
+            X_new[col] = pd.Categorical(X_new[col], categories=cats)
+
     X_new = pd.get_dummies(X_new, drop_first=True)
 
     feature_columns = joblib.load("feature_columns.pkl")
