@@ -36,7 +36,8 @@ def preprocess_data(df):
     df["WklyStudyHours"] = df["WklyStudyHours"].replace({
     "<5": 3,
     "5-10": 7,
-    ">10": 12
+    ">10": 12,
+    "nan": np.nan 
 })
 
     df["Result"] = (df["AverageScore"] >= 40).astype(int)
