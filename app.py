@@ -233,3 +233,28 @@ if __name__ == "__main__":
     joblib.dump(feature_columns, "feature_columns.pkl")
 
     print("Models Saved Successfully ✅")
+
+
+def run_full_pipeline(file_path):
+    df = load_data(file_path)
+    df = preprocess_data(df)
+
+    X, y_class, y_reg = get_features_targets(df)
+
+    log_model = joblib.load("logistic_model.pkl")
+    lin_model = joblib.load("linear_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+    kmeans = joblib.load("kmeans_model.pkl")
+    cluster_scaler = joblib.load("cluster_scaler.pkl")
+
+    df = predict_new_data(df, log_model, lin_model, scaler, kmeans, cluster_scaler)
+    df = generate_recommendations(df)
+
+    summary = {
+    "AverageScore": round(df["AverageScore"].mean(), 2),
+    "PredictedResult": int(df["Predicted_PassFail"].mode()[0]),
+    "LearnerCategory": df["Learner Category"].mode()[0],
+    "TopRecommendation": df["Recommendation"].mode()[0]
+}
+
+    return summary
