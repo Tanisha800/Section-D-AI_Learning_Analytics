@@ -585,8 +585,15 @@ def chart_bulk(results):
     return fig
 
 
+st.markdown("""
+<style>
+[data-testid="stSidebar"] > div:first-child {
+    padding-left: 20px;  /* Adjust value as needed */
+}
+</style>
+""", unsafe_allow_html=True)
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
-with st.sidebar:
+with st.sidebar :
     st.markdown("""
     <div class="sb-brand">
         <div class="sb-logo">Learn<span>IQ</span></div>
@@ -912,13 +919,13 @@ elif page == "AI Coach":
         </div>
         """, unsafe_allow_html=True)
 
-    with st.expander("⬡  Attach a student CSV for analysis"):
-        agent_csv = st.file_uploader("Student CSV", type=["csv"], key="acsv")
-        if agent_csv:
-            tmp = "/tmp/agent_upload.csv"
-            with open(tmp, "wb") as f: f.write(agent_csv.getbuffer())
-            st.session_state["acsv_path"] = tmp
-            st.caption(f"Attached: {agent_csv.name}")
+    
+    agent_csv = st.file_uploader("Attach Student CSV", type=["csv"], key="acsv")
+    if agent_csv:
+        tmp = "/tmp/agent_upload.csv"
+        with open(tmp, "wb") as f: f.write(agent_csv.getbuffer())
+        st.session_state["acsv_path"] = tmp
+        st.caption(f"Attached: {agent_csv.name}")
 
     st.markdown("""
     <div class="banner b-info">
