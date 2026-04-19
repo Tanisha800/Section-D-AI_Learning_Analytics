@@ -469,15 +469,21 @@ def load_agent():
         if ag is None:
             raise Exception("Graph compiled but app is None")
 
-        print("Agent loaded successfully")
         return ag
 
     except Exception as e:
-        print("AGENT LOAD ERROR:", e)
-        print(traceback.format_exc())
-        return None
+        error_msg = f"""
+❌ AGENT LOAD FAILED
+
+Error:
+{str(e)}
+
+Traceback:
+{traceback.format_exc()}
+"""
+        return error_msg  # ⬅️ RETURN ERROR INSTEAD OF None
 agent_app = load_agent()
-st.write("DEBUG: Agent status →", "Connected " if agent_app else "Not Connected ")
+agent_connected = not isinstance(agent_app, str)
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def badge_html(cat):
