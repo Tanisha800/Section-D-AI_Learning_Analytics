@@ -42,7 +42,28 @@ st.markdown("""
 
 /* ── RESET ── */
 *, *::before, *::after { box-sizing: border-box; }
-#MainMenu, header, footer { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+
+/* keep header functional but invisible */
+header {
+    background: transparent !important;
+}
+
+/* ensure sidebar is visible */
+[data-testid="stSidebar"] {
+    display: block !important;
+}
+
+/* ensure toggle button exists */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed;
+    top: 20px;
+    left: 10px;
+    z-index: 9999;
+}
 
 /* ── BASE ── */
 html, body, [class*="css"] {
