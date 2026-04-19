@@ -1,13 +1,28 @@
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
 import os
 
-try:
-    embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    print("Embedding model loaded")
-except Exception as e:
-    print("Embedding load failed:", e)
-    embedding = None
+# Lazy-loaded globals — only initialized when vector_db actually exists
+_embedding = None
+_embedding_loaded = False
+
+
+def _get_embedding():
+    """Load embedding model only when actually needed (lazy init)."""
+    global _embedding, _embedding_loaded
+
+    if _embedding_loaded:
+        return _embedding
+
+    _embedding_loaded = True
+
+    try:
+        from langchain_huggingface import HuggingFaceEmbeddings
+        _embedding = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        print("Embedding model loaded")
+    except Exception as e:
+        print("Embedding load failed:", e)
+        _embedding = None
+
+    return _embedding
 
 
 def load_db():
@@ -16,9 +31,13 @@ def load_db():
             print("vector_db folder not found")
             return None
 
+        embedding = _get_embedding()
+
         if embedding is None:
             print("Embedding not initialized")
             return None
+
+        from langchain_community.vectorstores import FAISS
 
         db = FAISS.load_local(
             "vector_db",

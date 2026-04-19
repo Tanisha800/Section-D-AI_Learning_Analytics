@@ -7,11 +7,6 @@ matplotlib
 seaborn
 langchain
 langchain-community
-langchain-huggingface
-faiss-cpu
-sentence-transformers
-transformers
-torch
 groq
 python-dotenv
 langgraph
