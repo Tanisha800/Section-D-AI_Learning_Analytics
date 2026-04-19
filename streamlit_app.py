@@ -462,14 +462,22 @@ models_ok = log_model is not None
 
 @st.cache_resource
 def load_agent():
+    import traceback
     try:
         from agent.graph import app as ag
+
+        if ag is None:
+            raise Exception("Graph compiled but app is None")
+
+        print("Agent loaded successfully")
         return ag
-    except Exception:
+
+    except Exception as e:
+        print("AGENT LOAD ERROR:", e)
+        print(traceback.format_exc())
         return None
-
 agent_app = load_agent()
-
+st.write("DEBUG: Agent status →", "Connected " if agent_app else "Not Connected ")
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 def badge_html(cat):
