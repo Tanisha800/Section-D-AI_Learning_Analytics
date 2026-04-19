@@ -903,7 +903,7 @@ elif page == "AI Coach":
     </div>
     """, unsafe_allow_html=True)
 
-    if not agent_app:
+    if not agent_connected:
         st.markdown("""
         <div class="banner b-warn">
             Agent not connected. Ensure <code>agent/graph.py</code>, <code>agent/llm.py</code>,
@@ -959,7 +959,7 @@ elif page == "AI Coach":
         st.session_state.chat.append(("user", user_msg))
         with st.spinner("Coach is thinking…"):
             try:
-                if agent_app:
+                if agent_connected:
                     state = dict(st.session_state.astate)
                     state["input"] = user_msg
                     if "acsv_path" in st.session_state:
