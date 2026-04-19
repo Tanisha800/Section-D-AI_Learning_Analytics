@@ -1,288 +1,972 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
-import seaborn as sns
-from app import preprocess_data, predict_new_data, generate_recommendations
+import matplotlib.patches as mpatches
+from matplotlib import rcParams
+import os
 
-# Load models and other necessary files
+# ── PAGE CONFIG ────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="LearnIQ · AI Study Coach",
+    page_icon="⬡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ── DESIGN SYSTEM CSS ──────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&f[]=cabinet-grotesk@300,400,500,700&f[]=jet-brains-mono@400,500&display=swap');
+
+/* ── TOKENS ── */
+:root {
+    --navy:      #050d1a;
+    --navy-2:    #0a1628;
+    --navy-3:    #0f2040;
+    --navy-4:    #162947;
+    --teal:      #00d4b4;
+    --teal-dim:  #00a88e;
+    --cream:     #f5efe0;
+    --cream-2:   #e8dfc8;
+    --cream-3:   #c8b99a;
+    --muted:     #4a6480;
+    --danger:    #ff6b6b;
+    --amber:     #ffb347;
+    --green:     #4ecb71;
+    --border:    rgba(0,212,180,0.12);
+    --border-2:  rgba(0,212,180,0.25);
+    --glow:      0 0 40px rgba(0,212,180,0.08);
+}
+
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; }
+#MainMenu, header, footer { visibility: hidden; }
+
+/* ── BASE ── */
+html, body, [class*="css"] {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    background: var(--navy);
+    color: var(--cream);
+}
+.stApp { background: var(--navy); }
+.block-container {
+    padding: 2rem 2.5rem 4rem 2.5rem;
+    max-width: 1140px;
+}
+
+/* ── SIDEBAR ── */
+[data-testid="stSidebar"] {
+    background: var(--navy-2);
+    border-right: 1px solid var(--border);
+}
+[data-testid="stSidebar"] > div:first-child { padding: 0; }
+[data-testid="stSidebar"] * { color: var(--cream) !important; }
+[data-testid="stSidebar"] .stRadio > label {
+    font-size: 0.62rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: var(--muted) !important;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--navy); }
+::-webkit-scrollbar-thumb { background: var(--navy-4); border-radius: 2px; }
+
+/* ── PAGE HERO ── */
+.hero {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--navy-2);
+    padding: 2.5rem 2.75rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+.hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, rgba(0,212,180,0.07) 0%, transparent 65%);
+    pointer-events: none;
+}
+.hero-eyebrow {
+    font-family: 'Cabinet Grotesk', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hero-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 18px; height: 1px;
+    background: var(--teal);
+}
+.hero-title {
+    font-family: 'Clash Display', sans-serif;
+    font-size: 2.6rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--cream);
+    line-height: 1.05;
+    margin-bottom: 0.6rem;
+}
+.hero-title span { color: var(--teal); }
+.hero-sub {
+    font-size: 0.95rem;
+    color: var(--cream-3);
+    font-weight: 400;
+    line-height: 1.6;
+    max-width: 520px;
+}
+
+/* ── SECTION LABEL ── */
+.sec-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sec-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ── STAT CARDS ── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 2rem;
+}
+.stat-card {
+    background: var(--navy-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border-2); }
+.stat-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--teal), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.stat-card:hover::after { opacity: 1; }
+.stat-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.1rem;
+    font-weight: 500;
+    color: var(--cream);
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+.stat-num .unit { font-size: 1rem; color: var(--teal); margin-left: 2px; }
+.stat-lbl {
+    font-size: 0.69rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+}
+.stat-delta {
+    font-size: 0.72rem;
+    color: var(--teal);
+    margin-top: 4px;
+}
+
+/* ── FEATURE CARDS ── */
+.feat-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+.feat-card {
+    background: var(--navy-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: default;
+}
+.feat-card:hover { border-color: var(--border-2); transform: translateY(-2px); }
+.feat-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: rgba(0,212,180,0.08);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    color: var(--teal);
+    font-weight: 700;
+    font-family: 'Clash Display', sans-serif;
+}
+.feat-title { font-family: 'Clash Display', sans-serif; font-size: 1rem; font-weight: 600; color: var(--cream); margin-bottom: 0.5rem; }
+.feat-desc  { font-size: 0.82rem; color: var(--cream-3); line-height: 1.6; }
+
+/* ── BADGE ── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+.b-risk { background: rgba(255,107,107,0.12); color: var(--danger); border: 1px solid rgba(255,107,107,0.25); }
+.b-avg  { background: rgba(255,179,71,0.12);  color: var(--amber);  border: 1px solid rgba(255,179,71,0.25); }
+.b-high { background: rgba(78,203,113,0.12);  color: var(--green);  border: 1px solid rgba(78,203,113,0.25); }
+.b-risk::before { content: '▲'; font-size: 0.55rem; }
+.b-avg::before  { content: '●'; font-size: 0.55rem; }
+.b-high::before { content: '★'; font-size: 0.55rem; }
+
+/* ── RESULT BLOCK ── */
+.result-wrap {
+    background: var(--navy-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    margin-top: 1.5rem;
+    box-shadow: var(--glow);
+}
+.metrics-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
+.metric-tile {
+    background: var(--navy-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    text-align: center;
+}
+.mt-val { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 500; color: var(--cream); letter-spacing: -0.02em; }
+.mt-lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 5px; }
+.cat-row { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+.cat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.rec-panel {
+    background: var(--navy-3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--teal);
+    border-radius: 0 10px 10px 0;
+    padding: 1rem 1.25rem;
+    font-size: 0.87rem;
+    color: var(--cream-2);
+    line-height: 1.65;
+}
+.rec-panel b { color: var(--teal); font-weight: 500; }
+
+/* ── INFO/WARN BANNERS ── */
+.banner {
+    border-radius: 10px;
+    padding: 0.8rem 1.1rem;
+    font-size: 0.82rem;
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+}
+.b-info { background: rgba(0,212,180,0.06); border: 1px solid rgba(0,212,180,0.2); color: #7de8da; }
+.b-warn { background: rgba(255,179,71,0.06); border: 1px solid rgba(255,179,71,0.2); color: #ffc87a; }
+
+/* ── CHAT ── */
+.chat-feed { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.25rem; padding: 0.25rem 0; }
+.bubble-wrap-u { display: flex; flex-direction: column; align-items: flex-end; }
+.bubble-wrap-a { display: flex; flex-direction: column; align-items: flex-start; }
+.bubble-lbl { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+.bubble-u {
+    max-width: 74%;
+    background: var(--teal);
+    color: var(--navy);
+    border-radius: 16px 16px 4px 16px;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    line-height: 1.55;
+}
+.bubble-a {
+    max-width: 74%;
+    background: var(--navy-3);
+    color: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 16px 16px 16px 4px;
+    padding: 0.7rem 1.1rem;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* ── FORM ── */
+div[data-testid="stForm"] {
+    background: var(--navy-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.75rem;
+}
+.stSelectbox label, .stNumberInput label, .stTextInput label {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    color: var(--muted) !important;
+}
+.stSelectbox [data-baseweb="select"] > div,
+.stNumberInput input,
+.stTextInput input {
+    background: var(--navy-3) !important;
+    border-color: var(--border) !important;
+    color: var(--cream) !important;
+    border-radius: 8px !important;
+}
+
+/* ── BUTTONS ── */
+.stButton > button {
+    background: var(--teal) !important;
+    color: var(--navy) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-family: 'Cabinet Grotesk', sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.04em !important;
+    padding: 0.6rem 1.5rem !important;
+    transition: opacity 0.15s, transform 0.15s !important;
+}
+.stButton > button:hover {
+    opacity: 0.88 !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ── TABS ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+    gap: 0; padding: 0;
+}
+.stTabs [data-baseweb="tab"] {
+    font-size: 0.8rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); padding: 0.55rem 1.1rem;
+    border-radius: 0; border-bottom: 2px solid transparent;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--teal) !important;
+    background: transparent !important;
+    border-bottom: 2px solid var(--teal) !important;
+}
+
+/* ── DATAFRAME ── */
+[data-testid="stDataFrame"] { border-radius: 10px; overflow: hidden; }
+
+/* ── SIDEBAR BRAND ── */
+.sb-brand {
+    padding: 2rem 1.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+}
+.sb-logo {
+    font-family: 'Clash Display', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--cream);
+    letter-spacing: -0.04em;
+}
+.sb-logo span { color: var(--teal); }
+.sb-tagline { font-size: 0.7rem; color: var(--muted); margin-top: 3px; letter-spacing: 0.06em; }
+.sb-status { padding: 1rem 1.5rem; }
+.sb-status-title { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem; }
+.sb-row { display: flex; align-items: center; gap: 8px; font-size: 0.77rem; color: var(--cream-3); padding: 3px 0; }
+.dot-on  { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); flex-shrink: 0; }
+.dot-off { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); flex-shrink: 0; }
+
+/* ── DIVIDER ── */
+.fancy-rule {
+    display: flex; align-items: center; gap: 12px;
+    margin: 2rem 0 1.5rem;
+    font-size: 0.6rem; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted);
+}
+.fancy-rule::before, .fancy-rule::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+/* ── UPLOAD AREA ── */
+[data-testid="stFileUploader"] {
+    background: var(--navy-2);
+    border: 1px dashed var(--border-2);
+    border-radius: 12px;
+    padding: 1rem;
+}
+[data-testid="stFileUploader"] label { color: var(--muted) !important; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── LOAD MODELS ────────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_artifacts():
     try:
-        log_model = joblib.load("logistic_model.pkl")
-        lin_model = joblib.load("linear_model.pkl")
-        scaler = joblib.load("scaler.pkl")
-        kmeans = joblib.load("kmeans_model.pkl")
-        cluster_scaler = joblib.load("cluster_scaler.pkl")
-        feature_columns = joblib.load("feature_columns.pkl")
-        return log_model, lin_model, scaler, kmeans, cluster_scaler, feature_columns
+        return (
+            joblib.load("logistic_model.pkl"),
+            joblib.load("linear_model.pkl"),
+            joblib.load("scaler.pkl"),
+            joblib.load("kmeans_model.pkl"),
+            joblib.load("cluster_scaler.pkl"),
+            joblib.load("feature_columns.pkl"),
+        )
     except FileNotFoundError:
-        st.error("Model files not found. Please run 'app.py' to train and save models first.")
         return None, None, None, None, None, None
 
 log_model, lin_model, scaler, kmeans, cluster_scaler, feature_columns = load_artifacts()
+models_ok = log_model is not None
 
-if log_model is not None:
-    st.title("AI Learning Analytics - Student Performance Prediction")
-    st.write("Enter student data to predict performance and get recommendations.")
+@st.cache_resource
+def load_agent():
+    try:
+        from agent.graph import app as ag
+        return ag
+    except Exception:
+        return None
 
-    # CSV Upload Section
-    st.markdown("---")
-    st.header("Bulk Prediction Upload")
-    st.write("Upload a CSV file containing student data to generate predictions for multiple students at once.")
-    
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    
-    if uploaded_file is not None:
-        try:
-            df_upload = pd.read_csv(uploaded_file)
-            st.write("Preview of uploaded data:")
-            st.dataframe(df_upload.head())
-            
-            if st.button("Generate Predictions for Uploaded File"):
-                with st.spinner("Processing..."):
-                    # We need to preprocess the uploaded data
-                    # The app.py functions expect a certain format.
-                    # Let's assume the CSV has the same columns as the form inputs (or similar to raw data)
-                    
-                    # We'll use predict_new_data which calls preprocess_data
-                    # preprocess_data handles "ParentEduc", "WklyStudyHours" cleaning etc.
-                    # It also calculates AverageScore if Math/Reading/Writing are present.
-                    
-                    results_upload_df = predict_new_data(df_upload, log_model, lin_model, scaler, kmeans, cluster_scaler)
-                    results_upload_df = generate_recommendations(results_upload_df)
-                    
-                    st.success("Batch Analysis Complete!")
-                    
-                    # Display results
-                    st.subheader("Results")
-                    
-                    # Filter columns to show relevant info + predictions
-                    # We want to keep input data + predictions + recommendations and Learner Category
-                    
-                    # Identify columns to drop if they exist - only drop Cluster ID
-                    cols_to_drop = ["Cluster"]
-                    results_display = results_upload_df.drop(columns=[c for c in cols_to_drop if c in results_upload_df.columns], errors='ignore')
+agent_app = load_agent()
 
-                    st.dataframe(results_display)
-                    
-                    # Download button
-                    csv = results_display.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="Download Results as CSV",
-                        data=csv,
-                        file_name='student_predictions.csv',
-                        mime='text/csv',
-                    )
 
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+# ── HELPERS ───────────────────────────────────────────────────────────────────
+def badge_html(cat):
+    cls = {"At Risk": "b-risk", "Average": "b-avg", "High Performer": "b-high"}.get(cat, "b-avg")
+    return f'<span class="badge {cls}">{cat}</span>'
 
-    st.markdown("---")
-    st.header("Individual Prediction")
+def run_pred(df_in):
+    from app import predict_new_data, generate_recommendations
+    r = predict_new_data(df_in, log_model, lin_model, scaler, kmeans, cluster_scaler)
+    return generate_recommendations(r)
 
-    # Input Form
-    with st.form("student_data_form"):
-        col1, col2 = st.columns(2)
+def setup_mpl():
+    rcParams.update({
+        "font.family":     "monospace",
+        "axes.facecolor":  "#0a1628",
+        "figure.facecolor":"#0a1628",
+        "text.color":      "#c8b99a",
+        "axes.labelcolor": "#4a6480",
+        "xtick.color":     "#4a6480",
+        "ytick.color":     "#4a6480",
+        "axes.edgecolor":  "#0f2040",
+        "grid.color":      "#0f2040",
+        "grid.linestyle":  "--",
+        "grid.alpha":      0.6,
+    })
 
-        with col1:
-            gender = st.selectbox("Gender", ["female", "male"])
-            ethnic_group = st.selectbox("Ethnic Group", ["group A", "group B", "group C", "group D", "group E"])
-            parent_educ = st.selectbox("Parent's Education", ["some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree"])
-            lunch_type = st.selectbox("Lunch Type", ["standard", "free/reduced"])
-            test_prep = st.selectbox("Test Preparation Course", ["none", "completed"])
+def chart_bar(avg_ds, actual, predicted):
+    setup_mpl()
+    fig, ax = plt.subplots(figsize=(5.5, 3.2))
+    labels = ["Dataset\nAvg", "Your\nScore", "Profile\nEst."]
+    vals   = [avg_ds, actual, predicted]
+    colors = ["#162947", "#00d4b4", "#4a6480"]
+    bars   = ax.bar(labels, vals, color=colors, width=0.42,
+                    edgecolor="#050d1a", linewidth=1.5, zorder=3)
+    ax.set_ylim(0, 115)
+    ax.spines[:].set_visible(False)
+    ax.yaxis.grid(True, zorder=0)
+    ax.set_axisbelow(True)
+    ax.tick_params(labelsize=8.5)
+    for b, v in zip(bars, vals):
+        ax.text(b.get_x() + b.get_width()/2, v + 2,
+                f"{v:.1f}", ha="center", va="bottom",
+                fontsize=9, color="#f5efe0", fontweight="bold")
+    plt.tight_layout(pad=0.5)
+    return fig
 
-        with col2:
-            parent_marital_status = st.selectbox("Parent Marital Status", ["married", "single", "widowed", "divorced"])
-            practice_sport = st.selectbox("Practice Sport", ["regularly", "sometimes", "never"])
-            is_first_child = st.selectbox("Is First Child", ["yes", "no"])
-            nr_siblings = st.number_input("Number of Siblings", min_value=0, max_value=10, value=1)
-            transport_means = st.selectbox("Transport Means", ["school_bus", "private"])
-            wkly_study_hours = st.selectbox("Weekly Study Hours", ["< 5", "5 - 10", "> 10"])
+def chart_cluster(proc_df, actual, predicted, study_hrs):
+    setup_mpl()
+    proc = proc_df.copy()
+    cf   = cluster_scaler.transform(proc[["AverageScore","WklyStudyHours"]])
+    proc["Cluster"] = kmeans.predict(cf)
+    si   = np.argsort(kmeans.cluster_centers_[:,0])
+    lmap = {si[0]:"At Risk", si[1]:"Average", si[2]:"High Performer"}
+    proc["Cat"] = proc["Cluster"].map(lmap)
+    pal = {"At Risk":"#ff6b6b","Average":"#ffb347","High Performer":"#4ecb71"}
+    fig, ax = plt.subplots(figsize=(6.5, 3.8))
+    for cat, grp in proc.groupby("Cat"):
+        ax.scatter(grp["WklyStudyHours"], grp["AverageScore"],
+                   color=pal[cat], alpha=0.18, s=14, label=cat, zorder=2)
+    ax.scatter(study_hrs, actual,    color="#00d4b4", s=200,
+               edgecolors="#050d1a", linewidths=2, marker="X",
+               label="You (current)", zorder=10)
+    ax.scatter(study_hrs, predicted, color="#f5efe0", s=110,
+               edgecolors="#050d1a", linewidths=1.5, marker="o",
+               label="You (profile)", zorder=9)
+    ax.set_xlabel("Study hours (encoded)", fontsize=8.5)
+    ax.set_ylabel("Average score",         fontsize=8.5)
+    ax.spines[:].set_visible(False)
+    ax.yaxis.grid(True, zorder=0)
+    ax.set_axisbelow(True)
+    leg = ax.legend(fontsize=8, framealpha=0, labelcolor="#c8b99a",
+                    edgecolor="#0f2040")
+    plt.tight_layout(pad=0.5)
+    return fig
 
-        st.subheader("Current Scores (For Analysis)")
-        col3, col4, col5 = st.columns(3)
-        with col3:
-            math_score = st.number_input("Math Score", min_value=0, max_value=100, value=70)
-        with col4:
-            reading_score = st.number_input("Reading Score", min_value=0, max_value=100, value=70)
-        with col5:
-            writing_score = st.number_input("Writing Score", min_value=0, max_value=100, value=70)
+def chart_bulk(results):
+    setup_mpl()
+    cc = results["Learner Category"].value_counts()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8.5, 3.4))
+    pal_list = ["#ff6b6b","#ffb347","#4ecb71"][:len(cc)]
+    wedges, texts, pcts = ax1.pie(
+        cc.values, labels=cc.index, colors=pal_list,
+        autopct="%1.0f%%", startangle=140,
+        textprops={"fontsize":8,"color":"#c8b99a"},
+        pctdistance=0.78,
+        wedgeprops={"linewidth":2,"edgecolor":"#050d1a"}
+    )
+    for pct in pcts: pct.set_color("#f5efe0"); pct.set_fontweight("bold")
+    ax1.set_title("Learner categories", fontsize=8.5, color="#4a6480", pad=8, loc="left")
+    ax2.hist(results["AverageScore"], bins=20, color="#00d4b4",
+             edgecolor="#050d1a", alpha=0.7, linewidth=0.8, zorder=3)
+    ax2.set_xlabel("Score",  fontsize=8.5)
+    ax2.set_ylabel("Count",  fontsize=8.5)
+    ax2.set_title("Score distribution", fontsize=8.5, color="#4a6480", pad=8, loc="left")
+    ax2.spines[:].set_visible(False)
+    ax2.yaxis.grid(True, zorder=0)
+    ax2.set_axisbelow(True)
+    plt.tight_layout(pad=0.6)
+    return fig
 
-        submitted = st.form_submit_button("Predict & Recommend")
 
-    if submitted:
-        # Create input DataFrame
-        input_data = {
-            "Gender": [gender],
-            "EthnicGroup": [ethnic_group],
-            "ParentEduc": [parent_educ],
-            "LunchType": [lunch_type],
-            "TestPrep": [test_prep],
-            "ParentMaritalStatus": [parent_marital_status],
-            "PracticeSport": [practice_sport],
-            "IsFirstChild": [is_first_child],
-            "NrSiblings": [nr_siblings],
-            "TransportMeans": [transport_means],
-            "WklyStudyHours": [wkly_study_hours],
-            "MathScore": [math_score],
-            "ReadingScore": [reading_score],
-            "WritingScore": [writing_score]
-        }
-        
-        df_new = pd.DataFrame(input_data)
+# ── SIDEBAR ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("""
+    <div class="sb-brand">
+        <div class="sb-logo">Learn<span>IQ</span></div>
+        <div class="sb-tagline">AI Learning Analytics · Milestone 2</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        # Handle potential formatting differences for WklyStudyHours matches app.py logic
-        # app.py expects: "<5", "5-10", ">10"
-        # Streamlit inputs: "< 5", "5 - 10", "> 10"
-        # The preprocess_data function strips spaces, so "< 5" becomes "<5", "5 - 10" becomes "5-10"
-        # So we can pass it as is, provided preprocess_data handles it correctly.
-        
-        try:
-            # Predict
-            # Using the imported predict_new_data function might be tricky if it relies on global scope or specific file paths
-            # But the logic is self-contained in the function except for feature_columns loading
-            # We already loaded the models, so we can pass them.
-            
-            # Note: app.py's predict_new_data loads feature_columns inside. 
-            # We can update app.py to accept feature_columns as argument OR just trust it works if pkl is in same dir.
-            # However, looking at app.py, predict_new_data calls preprocess_data
-            
-            # Make sure we don't have circular dependencies or issues calling app.py functions
-            
-            # Let's call the function from app.py
-            # BUT: app.py loads feature_columns.pkl using joblib.load("feature_columns.pkl")
-            # We need to make sure we are in the right directory.
-            
-            results_df = predict_new_data(df_new, log_model, lin_model, scaler, kmeans, cluster_scaler)
-            results_df = generate_recommendations(results_df)
-            
-            st.success("Analysis Complete!")
-            
-            # Retrieve values
-            predicted_pass_fail = results_df["Predicted_PassFail"][0]
-            predicted_score = results_df["Predicted_AverageScore"][0]
-            actual_score = results_df["AverageScore"][0] # Calculated from inputs
-            learner_category = results_df["Learner Category"][0]
-            recommendation = results_df["Recommendation"][0]
-            
-            st.subheader("Analysis Results")
-            
-            st.warning("Note: 'Predicted' values are based purely on your **Demographic Profile & Study Habits**, not your current scores. 'Current' values are based on the scores you entered.")
+    page = st.radio(
+        "nav",
+        ["Dashboard", "Individual", "Bulk Analysis", "AI Coach"],
+        label_visibility="collapsed"
+    )
 
-            # Row 1: Actual vs Predicted
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Current Average Score", f"{actual_score:.2f}", help="Calculated from the Math, Reading, and Writing scores you entered.")
-            with col2:
-                status = "Pass" if actual_score >= 40 else "Fail"
-                st.metric("Current Status", status, delta_color="normal" if status=="Pass" else "inverse", help="Pass if Average Score >= 40.")
-            with col3:
-                st.metric("Predicted Potential Score", f"{predicted_score:.2f}", help="Estimated score based on your demographics and study habits.")
-            with col4:
-                st.metric("Predicted Potential Status", "Pass" if predicted_pass_fail == 1 else "Fail", help="Likely status based on your profile.")
+    st.markdown("""<div class="sb-status">
+        <div class="sb-status-title">System status</div>
+    """, unsafe_allow_html=True)
 
-            # Row 2: Category and Recommendation
-            st.write(f"**Learner Category:** {learner_category}")
-            st.info(f"**Recommendation:** {recommendation}")
+    for name, ok in [
+        ("Logistic regression", models_ok),
+        ("Linear regression",   models_ok),
+        ("K-means clustering",  models_ok),
+        ("LangGraph agent",     agent_app is not None),
+    ]:
+        dot = "dot-on" if ok else "dot-off"
+        st.markdown(f'<div class="sb-row"><div class="{dot}"></div>{name}</div>',
+                    unsafe_allow_html=True)
 
-            # Visualization Section
-            st.markdown("---")
-            st.subheader("Visualizations")
-            
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ── DASHBOARD ─────────────────────────────────────────────────────────────────
+if page == "Dashboard":
+    st.markdown("""
+    <div class="hero">
+        <div class="hero-eyebrow">Project 2 · Section D</div>
+        <div class="hero-title">Predict. Analyse.<br><span>Coach.</span></div>
+        <div class="hero-sub">
+            An AI-powered learning analytics system that predicts student performance,
+            identifies learning gaps, and delivers personalised coaching through an
+            agentic study coach.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="sec-label">Model performance</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-num">73<span class="unit">%</span></div>
+            <div class="stat-lbl">Classification accuracy</div>
+            <div class="stat-delta">↑ Logistic regression</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num">0.85</div>
+            <div class="stat-lbl">F1 score</div>
+            <div class="stat-delta">↑ High recall priority</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num">16.2</div>
+            <div class="stat-lbl">Regression RMSE</div>
+            <div class="stat-delta">Linear regression</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-num">30<span class="unit">K+</span></div>
+            <div class="stat-lbl">Training records</div>
+            <div class="stat-delta">Kaggle dataset</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="fancy-rule">Features</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="feat-grid">
+        <div class="feat-card">
+            <div class="feat-icon">01</div>
+            <div class="feat-title">Individual Analysis</div>
+            <div class="feat-desc">Enter a student's profile and scores. Get an instant pass/fail prediction, learner category classification, and a personalised study recommendation.</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">02</div>
+            <div class="feat-title">Bulk Analysis</div>
+            <div class="feat-desc">Upload a CSV to analyse your entire cohort. Get category breakdowns, score distributions, and download a results file with predictions for every student.</div>
+        </div>
+        <div class="feat-card">
+            <div class="feat-icon">03</div>
+            <div class="feat-title">AI Study Coach</div>
+            <div class="feat-desc">Chat with a LangGraph-powered agentic coach. Analyse performance data, generate weekly study plans, and surface targeted learning resources.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="fancy-rule">Dataset</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="feat-card" style="margin-top:0">
+        <div class="feat-desc" style="line-height:1.8">
+            <span style="color:#f5efe0;font-weight:700">Students Performance in Exams</span>
+            &nbsp;·&nbsp; Kaggle &nbsp;·&nbsp; 30,000+ records<br>
+            Features: Math · Reading · Writing scores &nbsp;·&nbsp;
+            Ethnic group · Parent education · Lunch type ·
+            Test preparation · Marital status · Sport practice ·
+            Siblings · Transport · Weekly study hours
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ── INDIVIDUAL ────────────────────────────────────────────────────────────────
+elif page == "Individual":
+    st.markdown("""
+    <div class="hero-eyebrow" style="margin-bottom:0.4rem">Analysis</div>
+    <div class="hero-title" style="font-size:1.9rem;margin-bottom:0.4rem">Individual Prediction</div>
+    <div class="hero-sub" style="margin-bottom:1.75rem">Fill in the student profile below to get a real-time prediction.</div>
+    """, unsafe_allow_html=True)
+
+    if not models_ok:
+        st.markdown('<div class="banner b-warn">Models not loaded — run <code>app.py</code> first to generate .pkl files.</div>',
+                    unsafe_allow_html=True)
+        st.stop()
+
+    with st.form("ind_form"):
+        st.markdown('<div class="sec-label">Student background</div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            gender         = st.selectbox("Gender",               ["female","male"])
+            ethnic_group   = st.selectbox("Ethnic group",         ["group A","group B","group C","group D","group E"])
+            parent_educ    = st.selectbox("Parent education",     ["some high school","high school","some college","associate's degree","bachelor's degree","master's degree"])
+            lunch_type     = st.selectbox("Lunch type",            ["standard","free/reduced"])
+        with c2:
+            test_prep      = st.selectbox("Test preparation",     ["none","completed"])
+            parent_marital = st.selectbox("Parent marital status",["married","single","widowed","divorced"])
+            practice_sport = st.selectbox("Sport practice",       ["regularly","sometimes","never"])
+            is_first_child = st.selectbox("First child",          ["yes","no"])
+        with c3:
+            nr_siblings    = st.number_input("Siblings",           0, 10, 1)
+            transport      = st.selectbox("Transport",             ["school_bus","private"])
+            wkly_hours     = st.selectbox("Weekly study hours",    ["< 5","5 - 10","> 10"])
+
+        st.markdown('<div class="sec-label" style="margin-top:1.25rem">Current scores</div>', unsafe_allow_html=True)
+        s1, s2, s3 = st.columns(3)
+        with s1: math_score    = st.number_input("Math score",    0, 100, 70)
+        with s2: reading_score = st.number_input("Reading score", 0, 100, 70)
+        with s3: writing_score = st.number_input("Writing score", 0, 100, 70)
+
+        go = st.form_submit_button("⬡  Run Analysis", use_container_width=True)
+
+    if go:
+        df_in = pd.DataFrame([{
+            "Gender": gender, "EthnicGroup": ethnic_group, "ParentEduc": parent_educ,
+            "LunchType": lunch_type, "TestPrep": test_prep,
+            "ParentMaritalStatus": parent_marital, "PracticeSport": practice_sport,
+            "IsFirstChild": is_first_child, "NrSiblings": nr_siblings,
+            "TransportMeans": transport, "WklyStudyHours": wkly_hours,
+            "MathScore": math_score, "ReadingScore": reading_score, "WritingScore": writing_score
+        }])
+
+        with st.spinner("Running models…"):
             try:
-                # Load and preprocess original data for context
-                from app import load_data, preprocess_data
-                raw_df = load_data("./Data/raw/Student_Performance.csv")
-                processed_df = preprocess_data(raw_df)
-                
-                # 1. Score Comparison
-                st.write("### Score Comparison")
-                avg_score_dataset = processed_df["AverageScore"].mean()
-                
-                fig1, ax1 = plt.subplots(figsize=(8, 4))
-                # Compare Dataset, Actual, and Predicted
-                sns.barplot(
-                    x=["Dataset Avg", "Your Current", "Your Profile"], 
-                    y=[avg_score_dataset, actual_score, predicted_score], 
-                    ax=ax1, 
-                    palette=["grey", "blue", "green"]
-                )
-                ax1.set_ylabel("Average Score")
-                ax1.set_ylim(0, 100)
-                ax1.bar_label(ax1.containers[0], fmt='%.1f')
-                st.pyplot(fig1)
+                res          = run_pred(df_in)
+                pred_pf      = res["Predicted_PassFail"][0]
+                pred_score   = res["Predicted_AverageScore"][0]
+                actual_score = res["AverageScore"][0]
+                cat          = res["Learner Category"][0]
+                rec          = res["Recommendation"][0]
+                study_hrs    = res["WklyStudyHours"][0]
 
-                # 2. Cluster Visualization
-                st.write("### Learner Category Cluster Visualization")
-                
-                # We need to assign clusters to the dataset to color it
-                cluster_features_df = processed_df[["AverageScore", "WklyStudyHours"]]
-                cluster_scaled_df = cluster_scaler.transform(cluster_features_df)
-                processed_df["Cluster"] = kmeans.predict(cluster_scaled_df)
-                
-                cluster_centers = kmeans.cluster_centers_[:, 0]
-                sorted_indices = np.argsort(cluster_centers)
-                cluster_labels_map = {
-                    sorted_indices[0]: "At Risk",
-                    sorted_indices[1]: "Average",
-                    sorted_indices[2]: "High Performer"
-                }
-                processed_df["Learner Category"] = processed_df["Cluster"].map(cluster_labels_map)
+                st.markdown("""
+                <div class="banner b-info">
+                    <b>How to read this:</b> "Profile estimate" is based on your
+                    demographic & study habits. "Your score" is from the scores you entered above.
+                </div>
+                """, unsafe_allow_html=True)
 
-                # Prepare student data point - using ACTUAL score for plotting current position
-                student_wkly_study_hours = results_df["WklyStudyHours"][0] 
-                
-                fig2, ax2 = plt.subplots(figsize=(10, 6))
-                
-                # Plot background dataset
-                sns.scatterplot(
-                    data=processed_df, 
-                    x="WklyStudyHours", 
-                    y="AverageScore", 
-                    hue="Learner Category", 
-                    hue_order=["At Risk", "Average", "High Performer"],
-                    alpha=0.3, # Reduce alpha to make student point stand out
-                    palette="viridis",
-                    ax=ax2
-                )
-                
-                # Plot student actual point
-                ax2.scatter(
-                    x=student_wkly_study_hours, 
-                    y=actual_score, 
-                    color='red', 
-                    s=250, 
-                    edgecolors='black', 
-                    marker='X', 
-                    label='You (Current)',
-                    zorder=10
-                )
-                
-                # Optional: Plot predicted point?
-                ax2.scatter(
-                    x=student_wkly_study_hours, 
-                    y=predicted_score, 
-                    color='green', 
-                    s=150, 
-                    edgecolors='black', 
-                    marker='o', 
-                    label='You (Predicted)',
-                    zorder=9
-                )
-                
-                ax2.set_title("Study Hours vs. Average Score")
-                ax2.legend()
-                st.pyplot(fig2)
+                st.markdown(f"""
+                <div class="result-wrap">
+                    <div class="metrics-row">
+                        <div class="metric-tile">
+                            <div class="mt-val">{actual_score:.1f}</div>
+                            <div class="mt-lbl">Actual avg score</div>
+                        </div>
+                        <div class="metric-tile">
+                            <div class="mt-val" style="color:{'#4ecb71' if actual_score>=40 else '#ff6b6b'}">
+                                {"Pass" if actual_score>=40 else "Fail"}
+                            </div>
+                            <div class="mt-lbl">Actual status</div>
+                        </div>
+                        <div class="metric-tile">
+                            <div class="mt-val" style="color:#00d4b4">{pred_score:.1f}</div>
+                            <div class="mt-lbl">Profile estimate</div>
+                        </div>
+                        <div class="metric-tile">
+                            <div class="mt-val" style="color:{'#4ecb71' if pred_pf==1 else '#ff6b6b'}">
+                                {"Pass" if pred_pf==1 else "Fail"}
+                            </div>
+                            <div class="mt-lbl">Profile status</div>
+                        </div>
+                    </div>
+                    <div class="cat-row">
+                        <span class="cat-label">Learner category</span>
+                        {badge_html(cat)}
+                    </div>
+                    <div class="rec-panel">
+                        <b>Recommendation</b><br>{rec}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.markdown('<div class="fancy-rule" style="margin-top:2rem">Visualisations</div>',
+                            unsafe_allow_html=True)
+                tab1, tab2 = st.tabs(["Score Comparison", "Cluster Map"])
+
+                with tab1:
+                    try:
+                        from app import load_data, preprocess_data
+                        proc = preprocess_data(load_data("./Data/raw/Student_Performance.csv"))
+                        st.pyplot(chart_bar(proc["AverageScore"].mean(), actual_score, pred_score),
+                                  use_container_width=True)
+                    except Exception as e:
+                        st.caption(f"Chart unavailable: {e}")
+
+                with tab2:
+                    try:
+                        from app import load_data, preprocess_data
+                        proc = preprocess_data(load_data("./Data/raw/Student_Performance.csv"))
+                        st.pyplot(chart_cluster(proc, actual_score, pred_score, study_hrs),
+                                  use_container_width=True)
+                    except Exception as e:
+                        st.caption(f"Chart unavailable: {e}")
 
             except Exception as e:
-                st.error(f"Could not load visualizations: {e}")
+                st.error(f"Prediction error: {e}")
 
 
-        except Exception as e:
-            st.error(f"An error occurred during prediction: {e}")
+# ── BULK ANALYSIS ─────────────────────────────────────────────────────────────
+elif page == "Bulk Analysis":
+    st.markdown("""
+    <div class="hero-eyebrow" style="margin-bottom:0.4rem">Analysis</div>
+    <div class="hero-title" style="font-size:1.9rem;margin-bottom:0.4rem">Bulk Cohort Analysis</div>
+    <div class="hero-sub" style="margin-bottom:1.75rem">Upload a student CSV to analyse an entire cohort at once.</div>
+    """, unsafe_allow_html=True)
 
-else:
-    st.warning("Please ensure model files (*.pkl) are present in the directory.")
+    if not models_ok:
+        st.markdown('<div class="banner b-warn">Models not loaded — run <code>app.py</code> first.</div>',
+                    unsafe_allow_html=True)
+        st.stop()
+
+    st.markdown("""
+    <div class="banner b-info">
+        Required columns: <code>Gender · EthnicGroup · ParentEduc · LunchType · TestPrep ·
+        ParentMaritalStatus · PracticeSport · IsFirstChild · NrSiblings · TransportMeans ·
+        WklyStudyHours · MathScore · ReadingScore · WritingScore</code>
+    </div>
+    """, unsafe_allow_html=True)
+
+    uploaded = st.file_uploader("Drop your CSV here", type=["csv"],
+                                 label_visibility="collapsed")
+
+    if uploaded:
+        df_up = pd.read_csv(uploaded)
+        st.caption(f"{len(df_up)} students loaded")
+        st.dataframe(df_up.head(5), use_container_width=True)
+
+        if st.button("⬡  Run Batch Predictions", use_container_width=True):
+            with st.spinner("Analysing cohort…"):
+                try:
+                    results = run_pred(df_up.copy()).drop(columns=["Cluster"], errors="ignore")
+                    cc = results["Learner Category"].value_counts()
+
+                    st.markdown(f"""
+                    <div class="stat-grid" style="margin-top:1.5rem">
+                        <div class="stat-card">
+                            <div class="stat-num">{results["AverageScore"].mean():.1f}</div>
+                            <div class="stat-lbl">Cohort mean score</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-num" style="color:#ff6b6b">{cc.get("At Risk",0)}</div>
+                            <div class="stat-lbl">At risk</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-num" style="color:#ffb347">{cc.get("Average",0)}</div>
+                            <div class="stat-lbl">Average</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-num" style="color:#4ecb71">{cc.get("High Performer",0)}</div>
+                            <div class="stat-lbl">High performers</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    tab_t, tab_c = st.tabs(["Results Table", "Charts"])
+                    with tab_t:
+                        st.dataframe(results, use_container_width=True)
+                        st.download_button(
+                            "⬡  Download CSV",
+                            results.to_csv(index=False).encode(),
+                            "predictions.csv", "text/csv"
+                        )
+                    with tab_c:
+                        st.pyplot(chart_bulk(results), use_container_width=True)
+
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+
+# ── AI COACH ──────────────────────────────────────────────────────────────────
+elif page == "AI Coach":
+    st.markdown("""
+    <div class="hero-eyebrow" style="margin-bottom:0.4rem">Milestone 2</div>
+    <div class="hero-title" style="font-size:1.9rem;margin-bottom:0.4rem">AI Study Coach</div>
+    <div class="hero-sub" style="margin-bottom:1.75rem">
+        Chat with the LangGraph-powered agent — analyse data, build study plans, find resources.
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not agent_app:
+        st.markdown("""
+        <div class="banner b-warn">
+            Agent not connected. Ensure <code>agent/graph.py</code>, <code>agent/llm.py</code>,
+            <code>agent/tools.py</code>, and <code>agent/rag.py</code> are present and installed.
+            Running in demo mode.
+        </div>
+        """, unsafe_allow_html=True)
+
+    with st.expander("⬡  Attach a student CSV for analysis"):
+        agent_csv = st.file_uploader("Student CSV", type=["csv"], key="acsv")
+        if agent_csv:
+            tmp = "/tmp/agent_upload.csv"
+            with open(tmp, "wb") as f: f.write(agent_csv.getbuffer())
+            st.session_state["acsv_path"] = tmp
+            st.caption(f"Attached: {agent_csv.name}")
+
+    st.markdown("""
+    <div class="banner b-info">
+        Try: &nbsp;<b>"analyze student"</b>&nbsp; · &nbsp;<b>"create a study plan"</b>&nbsp; · &nbsp;<b>"find resources for math"</b>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if "chat"   not in st.session_state: st.session_state.chat   = []
+    if "astate" not in st.session_state: st.session_state.astate = {}
+
+    # Chat history
+    if st.session_state.chat:
+        html = '<div class="chat-feed">'
+        for role, msg in st.session_state.chat:
+            if role == "user":
+                html += f'<div class="bubble-wrap-u"><div class="bubble-lbl">You</div><div class="bubble-u">{msg}</div></div>'
+            else:
+                html += f'<div class="bubble-wrap-a"><div class="bubble-lbl">Coach</div><div class="bubble-a">{msg}</div></div>'
+        html += '</div>'
+        st.markdown(html, unsafe_allow_html=True)
+
+    with st.form("chat_form", clear_on_submit=True):
+        user_msg = st.text_input(
+            "Message",
+            placeholder="e.g. create a study plan for an at-risk student",
+            label_visibility="collapsed"
+        )
+        col_s, col_c = st.columns([5,1])
+        with col_s: send  = st.form_submit_button("⬡  Send",  use_container_width=True)
+        with col_c: clear = st.form_submit_button("Clear",    use_container_width=True)
+
+    if clear:
+        st.session_state.chat   = []
+        st.session_state.astate = {}
+        st.rerun()
+
+    if send and user_msg.strip():
+        st.session_state.chat.append(("user", user_msg))
+        with st.spinner("Coach is thinking…"):
+            try:
+                if agent_app:
+                    state = dict(st.session_state.astate)
+                    state["input"] = user_msg
+                    if "acsv_path" in st.session_state:
+                        state["file"] = st.session_state["acsv_path"]
+                    result = agent_app.invoke(state)
+                    st.session_state.astate.update(result)
+                    if "analysis"   in result: reply = "Analysis summary:\n\n"  + str(result["analysis"])
+                    elif "plan"     in result: reply = "Your study plan:\n\n"   + str(result["plan"])
+                    elif "resources" in result:
+                        reply = "Learning resources:\n\n" + str(result["resources"])
+                        if result.get("links"):
+                            reply += "\n\nLinks:\n" + "\n".join(f"• {l}" for l in result["links"])
+                    elif "response" in result: reply = result["response"]
+                    else: reply = "Could not generate a response — please rephrase."
+                else:
+                    u = user_msg.lower()
+                    if "plan" in u:
+                        reply = ("Here's a sample study plan:\n\n"
+                                 "1. Review weak subjects — 30 min daily\n"
+                                 "2. Full practice test every weekend\n"
+                                 "3. Focus on fundamentals if score < 60\n"
+                                 "4. Active recall only — no passive re-reading\n"
+                                 "5. Prioritise 7–8 hrs sleep; cramming is counterproductive\n\n"
+                                 "→ Connect the agent for a fully personalised plan.")
+                    elif "resource" in u or "material" in u:
+                        reply = ("Recommended resources:\n\n"
+                                 "• Khan Academy — khanacademy.org\n"
+                                 "• MIT OpenCourseWare — ocw.mit.edu\n"
+                                 "• 3Blue1Brown (YouTube) — visual maths\n"
+                                 "• Crash Course (YouTube) — all subjects\n\n"
+                                 "→ Connect the agent for topic-specific links.")
+                    elif "analyz" in u:
+                        reply = "Upload a CSV in the panel above and ensure the agent is connected to run a full performance analysis."
+                    else:
+                        reply = ("Hi — I'm your AI Study Coach.\n\n"
+                                 "I can help you:\n"
+                                 "• Analyse student performance data\n"
+                                 "• Build a personalised weekly study plan\n"
+                                 "• Find curated learning resources\n\n"
+                                 "Try: 'create a study plan' or 'find resources for reading'.")
+            except Exception as e:
+                reply = f"Agent error: {e}"
+
+        st.session_state.chat.append(("ai", reply))
+        st.rerun()
